@@ -1,87 +1,75 @@
+version: "3.8"
+
 services:
   vote:
-    build: 
-      context: ./vote
-      target: dev
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck: 
-      test: ["CMD", "curl", "-f", "http://localhost"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    volumes:
-     - ./vote:/usr/local/app
+    image: vote-app
+    build: ./vote
     ports:
-      - "8080:80"
+      - "5000:5000"
     networks:
-      - front-tier
-      - back-tier
+      - voting-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role == worker"
 
   result:
+    image: result-app
     build: ./result
-    entrypoint: nodemon --inspect=0.0.0.0 server.js
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy 
-    volumes:
-      - ./result:/usr/local/app
     ports:
-      - "8081:80"
-      - "127.0.0.1:9229:9229"
+      - "5001:5001"
     networks:
-      - front-tier
-      - back-tier
+      - voting-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role == worker"
 
   worker:
-    build:
-      context: ./worker
-    env_file:
-      - .env
-    depends_on:
-      redis:
-        condition: service_healthy 
-      db:
-        condition: service_healthy 
+    image: worker-app
+    build: ./worker
     networks:
-      - back-tier
+      - voting-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role == worker"
 
   redis:
     image: redis:alpine
-    volumes:
-      - "./healthchecks:/healthchecks"
-    healthcheck:
-      test: /healthchecks/redis.sh
-      interval: "10s"
-      timeout: "5s"
-      retries: 3
-      start_period: 10s
     networks:
-      - back-tier
+      - voting-net
+    deploy:
+      placement:
+        constraints:
+          - "node.role == manager"
 
   db:
     image: postgres:15-alpine
-    env_file:
-      - .env
     volumes:
-      - "db-data:/var/lib/postgresql/data"
-      - "./healthchecks:/healthchecks"
-    healthcheck:
-      test: /healthchecks/postgres.sh
-      interval: "10s"
-      timeout: "5s"
-      retries: 3
-      start_period: 10s
+      - db-data:/var/lib/postgresql/data
     networks:
-      - back-tier
+      - voting-net
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+    deploy:
+      placement:
+        constraints:
+          - "node.role == manager"
+
+networks:
+  voting-net:
+    driver: overlay
 
 volumes:
   db-data:
-
-networks:
-  front-tier:
-  back-tier:
