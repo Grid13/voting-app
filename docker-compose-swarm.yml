@@ -1,0 +1,75 @@
+version: "3.8"
+
+services:
+  vote:
+    image: vote-app
+    build: ./vote
+    ports:
+      - "5000:5000"
+    networks:
+      - voting-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role == worker"
+
+  result:
+    image: result-app
+    build: ./result
+    ports:
+      - "5001:5001"
+    networks:
+      - voting-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role == worker"
+
+  worker:
+    image: worker-app
+    build: ./worker
+    networks:
+      - voting-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role == worker"
+
+  redis:
+    image: redis:alpine
+    networks:
+      - voting-net
+    deploy:
+      placement:
+        constraints:
+          - "node.role == manager"
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - voting-net
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+    deploy:
+      placement:
+        constraints:
+          - "node.role == manager"
+
+networks:
+  voting-net:
+    driver: overlay
+
+volumes:
+  db-data:
